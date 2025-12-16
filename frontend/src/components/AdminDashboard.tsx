@@ -1,4 +1,9 @@
-import { useState, useEffect } from 'react';
+
+
+
+
+import React, { useState, useEffect, ReactNode } from 'react';
+import { AdminExportBatch } from './AdminExportBatch';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
@@ -29,8 +34,20 @@ import {
 } from '../lib/mock-data';
 import { submissionApi } from '../lib/api';
 import { toast } from 'sonner';
+import {
+  CheckCircle,
+  XCircle,
+  Eye,
+  Clock,
+  TrendingUp,
+  Users,
+  FileCheck
+} from 'lucide-react';
 
 interface Submission {
+  mediaType: string;
+  submittedDate: ReactNode;
+  credibility: string;
   id: string;
   url: string;
   title: string;
@@ -45,8 +62,8 @@ interface Submission {
   verifiedAt?: string;
   createdAt: string;
   updatedAt: string;
+
 }
-import { CheckCircle, XCircle, Eye, Clock, TrendingUp, Users, FileCheck } from 'lucide-react';
 
 interface AdminDashboardProps {
   onNavigate: (page: string) => void;
@@ -294,6 +311,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         </Card>
       </div>
 
+
       {/* Tabs */}
       <Tabs defaultValue="pending" className="space-y-4">
         <TabsList>
@@ -301,6 +319,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
             Pending ({pendingSubmissions.length})
           </TabsTrigger>
           <TabsTrigger value="verified">Verified ({verifiedSubmissions.length})</TabsTrigger>
+          {user.role === 'admin' && (
+            <TabsTrigger value="export-batch">
+              Export & Batch
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="pending" className="space-y-4">
@@ -354,7 +377,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                               </a>
                             )}
                             <p className="text-sm text-gray-500 mt-2">
-                              Submitted by {submission.submitterName} on {submission.submittedDate}
+                              Submitted by {submission.submitter} on {submission.submittedDate}
                             </p>
                           </div>
                         </div>
@@ -468,8 +491,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 </CardContent>
               </Card>
             ))}
+
           </div>
         </TabsContent>
+
+        {user.role === 'admin' && (
+          <TabsContent value="export-batch">
+            <AdminExportBatch />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Verification Dialog */}

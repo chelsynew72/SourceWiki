@@ -259,7 +259,72 @@ export const userApi = {
 
   deactivate: (id: string) => api.put(`/users/${id}/deactivate`),
 
+
   activate: (id: string) => api.put(`/users/${id}/activate`),
+};
+
+// Admin API
+export const adminApi = {
+  // Export functionality
+  exportSubmissions: (params: {
+    format?: 'csv' | 'json';
+    status?: string;
+    category?: string;
+    country?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    search?: string;
+    submitter?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) query.append(key, String(value));
+      });
+    }
+    return api.get(`/admin/submissions/export?${query.toString()}`);
+  },
+
+  getExportPreview: (params: {
+    status?: string;
+    category?: string;
+    country?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    search?: string;
+    submitter?: string;
+    limit?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) query.append(key, String(value));
+      });
+    }
+    return api.get(`/admin/submissions/export/preview?${query.toString()}`);
+  },
+
+  // Batch operations
+  batchUpdateSubmissions: (data: {
+    action: 'approve' | 'reject' | 'delete' | 'update';
+    submissionIds?: string[];
+    filters?: {
+      status?: string;
+      category?: string;
+      country?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    };
+    updateData?: {
+      credibility?: 'credible' | 'unreliable';
+      verifierNotes?: string;
+      category?: string;
+      wikipediaArticle?: string;
+    };
+    batchNotes?: string;
+  }) => api.post('/admin/submissions/batch', data),
 };
 
 export default api;

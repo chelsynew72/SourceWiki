@@ -1,203 +1,110 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit from "express-rate-limit";
 
 /**
- * Rate limit configuration based on user roles
- * Limits are per 15-minute window
+ * Rate limit configuration
  */
-const RATE_LIMITS = {
-  // Unauthenticated users (IP-based)
-  default: {
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 50, // 50 requests per 15 minutes
-  },
-  // Contributor role
-  contributor: {
-    windowMs: 15 * 60 * 1000,
-    max: 100, // 100 requests per 15 minutes
-  },
-  // Verifier role
-  verifier: {
-    windowMs: 15 * 60 * 1000,
-    max: 200, // 200 requests per 15 minutes
-  },
-  // Admin role
-  admin: {
-    windowMs: 15 * 60 * 1000,
-    max: 500, // 500 requests per 15 minutes
-  },
+export const RATE_LIMITS = {
+  default: { windowMs: 15 * 60 * 1000, max: 50 },
+  contributor: { windowMs: 15 * 60 * 1000, max: 100 },
+  verifier: { windowMs: 15 * 60 * 1000, max: 200 },
+  admin: { windowMs: 15 * 60 * 1000, max: 500 },
 };
 
 /**
- * Creates a rate limiter instance with role-based limits
- * @param {Object} options - Rate limiter options
- * @returns {Function} Express middleware
+ * Factory (USED ONLY AT INIT)
  */
-export const createRateLimiter = (options = {}) => {
-  const {
-    windowMs = RATE_LIMITS.default.windowMs,
-    max = RATE_LIMITS.default.max,
-    message = 'Too many requests, please try again later.',
-    skipSuccessfulRequests = false,
-    skipFailedRequests = false,
-  } = options;
-
+function buildLimiter({ windowMs, max, message }) {
   return rateLimit({
     windowMs,
     max,
+    standardHeaders: true,
+    legacyHeaders: true,
     message: {
       success: false,
       message,
     },
-    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers (RFC 7231)
-    legacyHeaders: true, // Also return `X-RateLimit-*` headers for backward compatibility
-    // Custom key generator: use user ID if authenticated, otherwise use IP
     keyGenerator: (req) => {
-      // If user is authenticated, use user ID + role for rate limiting
-      if (req.user && req.user._id) {
-        return `user:${req.user._id.toString()}:${req.user.role}`;
+      if (req.user?._id) {
+        return `user:${req.user._id}:${req.user.role}`;
       }
-      // Fallback to IP for unauthenticated requests
-      return req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || 'unknown';
+      return req.ip;
     },
-    // Custom handler for rate limit exceeded
     handler: (req, res) => {
-      const rateLimitInfo = req.rateLimit || {};
-      const remaining = rateLimitInfo.remaining ?? 0;
-      const limit = rateLimitInfo.limit ?? max;
-      const resetTime = rateLimitInfo.resetTime ?? new Date(Date.now() + windowMs);
-      const retryAfter = Math.ceil((resetTime - Date.now()) / 1000);
+      const rl = req.rateLimit;
+      const retryAfter = Math.ceil((rl.resetTime - Date.now()) / 1000);
 
-      // Ensure rate limit headers are set (express-rate-limit should set these automatically, but we ensure they're there)
       res.set({
-        'X-RateLimit-Limit': limit.toString(),
-        'X-RateLimit-Remaining': Math.max(0, remaining).toString(),
-        'X-RateLimit-Reset': new Date(resetTime).toISOString(),
-        'Retry-After': retryAfter.toString(),
+        "Retry-After": retryAfter.toString(),
       });
 
       res.status(429).json({
         success: false,
         message,
         rateLimit: {
-          limit,
-          remaining: Math.max(0, remaining),
-          reset: new Date(resetTime).toISOString(),
+          limit: rl.limit,
+          remaining: rl.remaining,
+          reset: rl.resetTime,
           retryAfter,
         },
       });
     },
-    // Custom skip function
-    skip: (req) => {
-      if (skipSuccessfulRequests && req.statusCode < 400) {
-        return true;
-      }
-      if (skipFailedRequests && req.statusCode >= 400) {
-        return true;
-      }
-      return false;
-    },
-    // Store rate limit info in request for custom headers
-    store: options.store, // Allow custom store (e.g., Redis) to be passed
   });
-};
-
-// Cache rate limiters by role to avoid recreating them on each request
-const limiterCache = new Map();
-
-/**
- * Get or create a rate limiter for a specific role
- */
-function getRateLimiterForRole(role, limitConfig) {
-  const cacheKey = role || 'default';
-  
-  if (!limiterCache.has(cacheKey)) {
-    const limiter = createRateLimiter({
-      windowMs: limitConfig.windowMs,
-      max: limitConfig.max,
-      message: `Too many requests${role ? ` for ${role} role` : ''}, please try again later.`,
-    });
-    limiterCache.set(cacheKey, limiter);
-  }
-  
-  return limiterCache.get(cacheKey);
 }
 
 /**
- * Middleware that applies rate limiting based on user role
- * This middleware should be used after optionalAuth to have req.user available
+ * ✅ CREATE ALL LIMITERS AT MODULE LOAD
  */
-export const roleBasedRateLimiter = (req, res, next) => {
-  // Determine the rate limit based on user role
-  let limitConfig;
-  let role;
-  
-  if (req.user && req.user.role) {
-    // User is authenticated, use role-based limits
-    role = req.user.role;
-    limitConfig = RATE_LIMITS[role] || RATE_LIMITS.contributor;
-  } else {
-    // User is not authenticated, use default IP-based limits
-    role = null;
-    limitConfig = RATE_LIMITS.default;
-  }
+const LIMITERS = {
+  default: buildLimiter({
+    ...RATE_LIMITS.default,
+    message: "Too many requests, please try again later.",
+  }),
 
-  // Get or create rate limiter for this role
-  const limiter = getRateLimiterForRole(role, limitConfig);
+  contributor: buildLimiter({
+    ...RATE_LIMITS.contributor,
+    message: "Too many requests for contributor role.",
+  }),
 
-  // Apply rate limiter
+  verifier: buildLimiter({
+    ...RATE_LIMITS.verifier,
+    message: "Too many requests for verifier role.",
+  }),
+
+  admin: buildLimiter({
+    ...RATE_LIMITS.admin,
+    message: "Too many requests for admin role.",
+  }),
+};
+
+/**
+ * ✅ Role-based rate limiter (SAFE)
+ */
+export function roleBasedRateLimiter(req, res, next) {
+  const role = req.user?.role || "default";
+  const limiter = LIMITERS[role] || LIMITERS.default;
   limiter(req, res, next);
-};
+}
 
 /**
- * Rate limiter for authenticated users only
- * Falls back to IP-based limiting if user is not authenticated
- * Note: This should be used after optionalAuth middleware
+ * ✅ Role-specific limiter (SAFE)
  */
-export const userRateLimiter = roleBasedRateLimiter;
+export function roleSpecificRateLimiter(roles) {
+  const allowedRoles = Array.isArray(roles) ? roles : [roles];
 
-/**
- * Rate limiter for specific roles
- * @param {string|string[]} roles - Role(s) to apply this limiter to
- * @param {Object} customLimits - Custom rate limit configuration
- */
-export const roleSpecificRateLimiter = (roles, customLimits = {}) => {
-  const roleArray = Array.isArray(roles) ? roles : [roles];
-  
   return (req, res, next) => {
-    // Check if user has one of the specified roles
-    if (req.user && roleArray.includes(req.user.role)) {
-      const limitConfig = customLimits[req.user.role] || RATE_LIMITS[req.user.role] || RATE_LIMITS.contributor;
-      
-      const limiter = createRateLimiter({
-        windowMs: limitConfig.windowMs,
-        max: limitConfig.max,
-        message: `Rate limit exceeded for ${req.user.role} role. Please try again later.`,
-      });
+    const role = req.user?.role;
 
-      return limiter(req, res, next);
+    if (role && allowedRoles.includes(role)) {
+      return LIMITERS[role](req, res, next);
     }
-    
-    // If user doesn't have the role, use default limiter
-    const limiter = createRateLimiter({
-      windowMs: RATE_LIMITS.default.windowMs,
-      max: RATE_LIMITS.default.max,
-    });
 
-    return limiter(req, res, next);
+    return LIMITERS.default(req, res, next);
   };
-};
+}
 
 /**
- * Strict rate limiter for unauthenticated requests (IP-based)
+ * ✅ IP-only limiter (SAFE)
  */
-export const ipRateLimiter = createRateLimiter({
-  windowMs: RATE_LIMITS.default.windowMs,
-  max: RATE_LIMITS.default.max,
-  message: 'Too many requests from this IP, please try again later.',
-});
-
-/**
- * Export rate limit configurations for reference
- */
-export { RATE_LIMITS };
+export const ipRateLimiter = LIMITERS.default;
+export const userRateLimiter = roleBasedRateLimiter;
 

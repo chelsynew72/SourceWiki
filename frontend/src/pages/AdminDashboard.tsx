@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react';
+
+
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AdminExportBatch } from '../components/AdminExportBatch';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -30,6 +33,16 @@ import {
 } from '../lib/mock-data';
 import { submissionApi } from '../lib/api';
 import { toast } from 'sonner';
+import {
+  CheckCircle,
+  XCircle,
+  Eye,
+  Clock,
+  TrendingUp,
+  Users,
+  FileCheck
+} from 'lucide-react';
+
 
 interface Submission {
   id: string;
@@ -47,7 +60,6 @@ interface Submission {
   createdAt: string;
   updatedAt: string;
 }
-import { CheckCircle, XCircle, Eye, Clock, TrendingUp, Users, FileCheck } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -243,6 +255,7 @@ export const AdminDashboard: React.FC = () => {
         </Card>
       </div>
 
+
       {/* Tabs */}
       <Tabs defaultValue="pending" className="space-y-4">
         <TabsList>
@@ -250,6 +263,11 @@ export const AdminDashboard: React.FC = () => {
             Pending ({pendingSubmissions.length})
           </TabsTrigger>
           <TabsTrigger value="verified">Verified ({verifiedSubmissions.length})</TabsTrigger>
+          {user.role === 'admin' && (
+            <TabsTrigger value="export-batch">
+              Export & Batch
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="pending" className="space-y-4">
@@ -411,7 +429,14 @@ export const AdminDashboard: React.FC = () => {
               </Card>
             ))}
           </div>
+
         </TabsContent>
+
+        {user.role === 'admin' && (
+          <TabsContent value="export-batch">
+            <AdminExportBatch />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Verification Dialog */}

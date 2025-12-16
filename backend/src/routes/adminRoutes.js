@@ -1,6 +1,9 @@
+
+
 import express from 'express';
 import AdminController from '../controllers/adminController.js';
 import { protect, authorize } from '../middleware/auth.js';
+import { batchOperationValidation, exportValidation, validate } from '../middleware/validator.js';
 
 const router = express.Router();
 
@@ -21,5 +24,10 @@ router.delete('/users/:id', AdminController.deleteUser);
 router.get('/submissions', AdminController.getSubmissions);
 router.put('/submissions/:id/override', AdminController.overrideSubmission);
 router.delete('/submissions/:id', AdminController.deleteSubmission);
+
+// Export & Batch Operations
+router.get('/submissions/export', exportValidation, validate, AdminController.exportSubmissions);
+router.get('/submissions/export/preview', AdminController.getExportPreview);
+router.post('/submissions/batch', batchOperationValidation, validate, AdminController.batchUpdateSubmissions);
 
 export default router;
